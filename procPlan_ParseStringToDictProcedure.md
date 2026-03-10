@@ -1,25 +1,42 @@
 ## Procedure Purpose
-Parse a JSON-like string to populate a Dictionary instance with key-value pairs. Supports mixed data types (String, Boolean, Double) and flexible syntax with optional whitespace.
+Parse a JSON-like string and populate a Dictionary with key-value pairs. Supports String, Boolean, and Double values with flexible whitespace.
+
+All methods in this procedure are Public. `ParseStringToDictProcedure` is the procedure method, and the remaining methods are called in sequence by it.
 
 ## Procedure Detailed Requirements
 
 **Overall Action:**
-Parse input string with format `{"key1":"value1", "key2":value2, "key3":True}` and add each key-value pair to the Dictionary instance using the existing `.Add` method. The procedure should be tolerant of whitespace variations and support both quoted and unquoted keys.
+Parse `{"key1":"value1", "key2":value2, "key3":True}`-style input and add each pair via `.Add`. The procedure tolerates whitespace and supports quoted or unquoted keys.
 
 **Input Requirements:**
-- `dict` (Dictionary object): Pre-initialized via `Set dict = ExcelSteps.New_Dictionary`; can be empty or contain existing entries
-- `jsonStr` (String): JSON-like formatted string; must have outer braces `{}`; pairs separated by commas; each pair formatted as `key:value`
+- `dict` (Dictionary object): Pre-initialized via `Set dict = ExcelSteps.New_Dictionary`; may be empty or pre-populated
+- `jsonStr` (String): JSON-like string with outer braces `{}`, comma-separated `key:value` pairs
+
+**String Format Requirements:**
+- Outer braces: `{` and `}`
+- Key-value pairs: `"key":value` or `key:value`
+- Separator: comma between pairs
+- String values: quoted `"value"`
+- Numeric values: unquoted numbers (Integer/Long/Double)
+- Boolean values: unquoted `True` or `False` (case-insensitive)
+- Whitespace: tolerant of spaces around delimiters
 
 **Output:**
-- Returns `Boolean`: True if parsing succeeded; False if validation/parsing errors
-- Modifies `dict` by adding parsed key-value pairs via `.Add` method
-- Existing dictionary entries preserved; duplicate keys result in value update per `.Add` behavior
+- Returns `Boolean`: `True` on success, `False` on validation/parsing errors
+- Modifies `dict` by adding parsed key-value pairs via `.Add`
+- Preserves existing entries; duplicate keys are updated per `.Add` behavior
 
 **Type Handling:**
 - String values: Enclosed in double quotes `"value"`
 - Boolean values: Unquoted `True` or `False` (case-insensitive)
 - Numeric values: Unquoted numeric literals parsed as Double
 - Keys: Support both quoted `"key"` and unquoted `key` formats
+
+**Data Type Mapping:**
+- Quoted strings -> String
+- Numeric literals -> Double
+- `True`/`False` -> Boolean
+- Empty value -> Empty
 
 ## Procedure Method/Sub-Procedure Descriptions
 
@@ -33,9 +50,7 @@ Parse input string with format `{"key1":"value1", "key2":value2, "key3":True}` a
   3. Validate first char = `{` via `errs.IsFail(Left(trimmedStr, 1) <> "{", 2)`
   4. Validate last char = `}` via `errs.IsFail(Right(trimmedStr, 1) <> "}", 3)`
   5. Return `Mid(trimmedStr, 2, Len(trimmedStr) - 2)` (substring without first and last chars)
-- **Data Flow**: Reads jsonStr; returns stripped string
 - **Validation/Error Conditions**: Check length >= 3; check first/last characters are braces
-- **ExcelSteps Integration**: Use errs.IsFail for validation checks per `copilot-instructions.md`
 
 ### SplitIntoPairs
 - **Action**: Split inner string into array of "key:value" pair strings, handling commas within quoted values
@@ -49,9 +64,7 @@ Parse input string with format `{"key1":"value1", "key2":value2, "key3":True}` a
   5. Else: append char to currentPair
   6. After loop: append final currentPair to collection
   7. Size pairsArray and populate from collection
-- **Data Flow**: Reads innerStr character by character; builds pairsArray; returns count
 - **Validation/Error Conditions**: Check innerStr length > 0; return False if empty
-- **ExcelSteps Integration**: Standard VBA string manipulation
 
 ### ParsePair
 - **Action**: Parse single "key:value" pair string into separate key and typed value
@@ -64,9 +77,7 @@ Parse input string with format `{"key1":"value1", "key2":value2, "key3":True}` a
   4. Trim and remove quotes from key if present: Check `Left(keyTrimmed, 1) = """` and `Right(keyTrimmed, 1) = """`
   5. Call DetectValueType to parse valueStr into typed value
   6. Return key and value via ByRef arguments
-- **Data Flow**: Reads pairStr; extracts and processes key; calls DetectValueType for value; sets ByRef outputs
 - **Validation/Error Conditions**: Validate colon exists in pair string; validate detectValueType succeeds
-- **ExcelSteps Integration**: Use errs.IsFail for validation
 
 ### DetectValueType
 - **Action**: Analyze value string and return appropriately typed Variant (String, Boolean, or Double)
@@ -81,9 +92,7 @@ Parse input string with format `{"key1":"value1", "key2":value2, "key3":True}` a
   4. Check if numeric: Use `IsNumeric(trimmed)`
      - If yes: return `CDbl(trimmed)`
   5. Else: invalid type, set error via `errs.IsFail(True, 1)` and return False
-- **Data Flow**: Reads valueStr; analyzes format; returns typed value via ByRef
 - **Validation/Error Conditions**: Return error if value doesn't match any recognized type
-- **ExcelSteps Integration**: Standard VBA type checking and conversion
 
 ### AddParsedValue
 - **Action**: Add parsed key-value pair to Dictionary using existing .Add method
@@ -93,13 +102,25 @@ Parse input string with format `{"key1":"value1", "key2":value2, "key3":True}` a
   1. Call `dict.Add key, value`
   2. .Add method handles both new keys and updates to existing keys automatically
   3. Return True if no errors
-- **Data Flow**: Calls dict.Add with key and value arguments
 - **Validation/Error Conditions**: Rely on .Add method's existing validation
-- **ExcelSteps Integration**: Uses existing Dictionary.Add method which handles IsObject checks internally
 
 ## Testing Requirements
 
 **Test Module Location:** tests_Dictionary.bas; Procedure group: procs.dictionary
+
+**Test Coverage Scope:** Unit tests of individual methods and integration test of the full procedure method:
+- Parse simple string pairs (single key-value)
+- Parse multiple pairs with mixed types
+- Parse with various whitespace patterns
+- Parse with quoted and unquoted keys
+- Parse into initialized empty vs initialized pre-existing dictionary
+- Error cases: malformed JSON, unmatched braces, invalid syntax
+
+**Impact on Existing Tests:** None - new tests added only
+
+**Test Data Requirements:** No external test files needed; all test strings are defined in test code
+
+**Cross-workbook Instantiation:** `ExcelSteps.New_Dictionary` already exists in `Validation.bas`
 
 **Test Setup Pattern:**
 ```vb
@@ -108,7 +129,7 @@ Set dict = ExcelSteps.New_Dictionary
 ```
 
 **Success Criteria:**
-- Parse simple single pair: `dict.ParseStringToDict(dict, "{""name"":""Alice""}")` → dict.Item("name") = "Alice"
+- Parse simple single pair: `dict.ParseStringToDictProcedure("{""name"":""Alice""}")` -> `dict.Item("name") = "Alice"`
 - Parse multiple pairs: `{"name":"Alice", "age":25}` → two items with correct values
 - Parse mixed types: String, Boolean, Double all correctly typed
 - Parse with whitespace: `{ "key1" : "val1" , "key2" : 123 }` succeeds
@@ -128,11 +149,11 @@ Set dict = ExcelSteps.New_Dictionary
 - Special characters in string values
 - Very long strings (performance check)
 
-**Helper Subroutines:**
-If multiple tests share setup pattern, create helper:
+**Shared Test Setup Subroutines:**
+If multiple tests share setup pattern, create a shared setup subroutine:
 ```vb
-Sub HelperParseAndValidate(tst As Test, dict As Object, jsonStr As String, expectedSize As Long)
-    tst.Assert tst, dict.ParseStringToDict(dict, jsonStr)
+Sub SetupParseAndValidate(tst As Test, dict As Object, jsonStr As String, expectedSize As Long)
+    tst.Assert tst, dict.ParseStringToDictProcedure(jsonStr)
     tst.Assert tst, dict.Size = expectedSize
 End Sub
 ```
