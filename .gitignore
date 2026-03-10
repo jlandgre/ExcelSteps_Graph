@@ -1,0 +1,27 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Obsidian cache/workspace state (machine-specific)
+.obsidian/workspace.json
+.obsidian/workspace-mobile.json
+.obsidian/cache/
+.obsidian/.trash/
+
+# Keep vault settings/plugins in git by default.
+# To ignore all Obsidian app config, uncomment:
+# .obsidian/
+
+# Office/Excel temp and lock files
+~$*.xlsx
+~$*.xlsm
+~$*.xlam
+~$*.docx
+~$*.pptx
+
+# Generic temp files
+*.tmp
+*.temp
+*.swp
+*.swo
