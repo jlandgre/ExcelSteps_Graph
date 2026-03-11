@@ -84,3 +84,37 @@ If you want, next I can draft the exact `SetErrs` pseudocode in VBA style (sti
 | 110   | modInterface | RefreshAPI      | Base                                                                 |       | FALSE       | ExcelSteps |
 | 120   | modInterface | Auto_Open       | Base                                                                 |       | FALSE       | ExcelSteps |
 | 130   | modInterface | RefreshDriver   | Base                                                                 |       | FALSE       | ExcelSteps |
+
+## Testing Practice: Mock Errors_ Table
+
+Use a mock `Errors_` table in the tests workbook rather than relying on the add-in workbook table.
+
+### Setup rules
+- In tests, initialize `errs` with `wkbkE = tst.wkbkTest` so lookups resolve against the tests workbook.
+- Use `SetErrs` with a dummy non-driver Boolean argument and pass `tst.wkbkTest`.
+- Populate `Errors_` test data through `Populate_Errs_Default` in `Populate_Errs.bas`.
+- Clear the sheet first and write row-1 headers from `sErrorsHeadings`.
+
+### Error code architecture
+- The `Base` row is always developer-facing (`iMsgDevUser = FALSE`).
+- The `Base` row handles fallback messaging for unknown VBA errors (`sMsg_String = "Base"`).
+- User-facing and developer-facing non-base messages use `Base + x` codes.
+- `x` comes from the `errs.IsFail(..., iCode, ...)` argument and is stored in `errs.iCodeLocal`.
+- Lookup code is generated as `errs.iCodeReport = BaseCode(Locn) + errs.iCodeLocal`.
+- This keeps message text in the table, avoids hard-coded strings in code, and supports easy renumbering.
+
+### Example mock Errors_ table
+
+| iCode | Module | Routine  | sMsg_String         | sVal | iMsgDevUser | VBAProject |
+| ----- | ------ | -------- | ------------------- | ---- | ----------- | ---------- |
+| 2000  |        | TestProc | Base                |      | FALSE       |            |
+| 2001  |        | TestProc | User visible:       |      | TRUE        |            |
+| 2002  |        | TestProc | Developer detail:   |      | FALSE       |            |
+| 3000  |        | BadProc  | Base                |      | FALSE       |            |
+| 3001  |        |          |                     |      | maybe       |            |
+| 4000  |        | UserProc | Base                |      | FALSE       |            |
+| 4001  |        | UserProc | User visible:       |      | TRUE        |            |
+
+Notes:
+- Row `3001` is intentionally malformed for validation testing.
+- In this fixture, `TestProc` with `iCodeLocal = 1` resolves to `2001`; with `iCodeLocal = 2` resolves to `2002`.
