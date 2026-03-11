@@ -3,12 +3,13 @@ Define a concise, repeatable process for planning and implementing new code in a
 ## Overall guidance
 *  We refer to human and AI collaborator roles as "ProjectOwner" and "AI"
 * We use the data object architecture in `copilot-instructions.md` (`tblRowsCols` + `mdlScenario`).
-*  The workspace landscape for the project and change descriptions is comprised of a `ProjectName` folder and an Obsidian `Graph_ProjectName` folder containing notes with context. They have distinct GitHub repositories, so both have a `.GitHub` folder in their root; however Skill and and `copilot-instructions.md` are in `ProjectName/.Github` only.
+*  The workspace landscape (`ProjName.code-workspace`) for the project and change descriptions is comprised of a `ProjectName` folder and an Obsidian `Graph_ProjectName` folder containing notes with context. They have distinct GitHub repositories, so both have a `.GitHub` folder in their root; however Skill and and `copilot-instructions.md` are in `ProjectName/.Github` only. If `ExcelSteps` is used in the project, its project folder is also part of the workspace.
 * We develop three change-related files to plan what is needed in "Planning Mode" for a code change. They are developed sequentially with hard stage gates, and AI should not proceed into developing subsequent documents until **ProjectOwner** approves.
-	* `Change_ChangeName.md`: Initiates code change from **ProjectOwner** description in its "Purpose" section. This document is Co-developed in Planning Mode by **ProjectOwner** and **AI**.
+	* `Change_ChangeName.md`: Initiates code change from **ProjectOwner** description in its "Purpose" section. This document is co-developed in Planning Mode by **ProjectOwner** and **AI**. It is a high-level description.
 	* `procPlan_ProcedureMethodName.md` (We develop one such document per procedure. It is linked to the outline in the top level `Change_ChangeName.md`. It describes code details, list of methods and their actions etc. 
-	* `Code_plan.csv`: Rows/columns table lists methods (rows), arguments, docstrings, qualitative internal logic and testing considerations (columns). This is developed as the last stage of planning changes but, when updated to "as coded" serves as project documentation.
- The \*.md files are in the Obsidian graph folder. The third, code plan CSV is in the project folder's `/docs subfolder`.
+	* `Code_plan.csv`: Rows/columns table lists methods (rows), arguments, docstrings, qualitative internal logic and testing considerations (columns). This is developed as the last stage of planning changes but, when updated to "as coded" serves as project documentation. See [[Code_Plan]] for example and background.
+	
+ \*.md files are in the Obsidian graph folder. The third, code plan CSV is in the project folder's `/docs subfolder`.
 
 ### Required Sequence (Do Not Skip)
 1. `Change_ChangeName.md` only: develop and iterate this note until **ProjectOwner** explicitly confirms it is finalized.
