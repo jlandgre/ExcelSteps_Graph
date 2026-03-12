@@ -107,6 +107,63 @@ Replace direct `aryErrLookup()` array-index usage in `ErrorHandling.AppendErrMsg
   2. Else (nested path):
      - Append `sMsgSuffix` only when non-user-facing.
 
+  ## Additional Procedure: RecordErr Consolidation (3/12/26)
+  ### Objective
+  Refactor `ErrorHandling.RecordErr` into the primary orchestration procedure for error lifecycle, and fold current `AppendErrMsg` branching into this single flow while preserving external behavior and call signatures.
+
+  ### Scope
+  1. Keep routine name `RecordErr` unchanged.
+  2. Move root/nested message branching decisions to `RecordErr` (or narrowly-scoped private helpers called by `RecordErr`).
+  3. Migrate metadata lookup responsibilities from `aryErrLookup` toward `ErrorMeta`.
+  4. De-emphasize `iErrNotFound` sentinel checks in message assembly; rely on explicit `meta.IsFound` state.
+
+  ### Detailed Flow Requirements
+  1. **Call-context setup**
+    - Compute `IsDriverCall = IsMissing(CallingFunction)`.
+    - For non-driver Boolean callers, set `CallingFunction = False` immediately.
+    - Set `errs.Locn = Locn`.
+  2. **Nested path first (early exit style)**
+    - If `Not errs.IsNewErr`:
+      - If `Not errs.IsUserFacing`, append `Called by <Locn>` line.
+      - Skip root lookup/build logic.
+  3. **Root path orchestration**
+    - Resolve base/report code.
+    - Instance `ErrorMeta` and call `LoadFromLookup`.
+    - Call `Validate`.
+    - If `errs.ErrMsg` already contains text, add line break separator before appending new root message.
+    - If `meta.IsFound = False`, append not-found message per current wording rules.
+    - Else append message via `meta.ToUserMessage` or `meta.ToDeveloperMessage` based on `meta.IsUserFacing`.
+    - Set `errs.IsNewErr = False`.
+  4. **Reporting gate**
+    - Preserve current reporting condition using `IsShowMsgs` and driver/testing context.
+    - Invoke `ReportMsg` only when gate evaluates True.
+
+  ### Method Ownership Changes
+  1. `RecordErr` owns control flow for new vs nested handling and report gating.
+  2. `ErrorMeta` owns lookup-state semantics (`found`, malformed metadata, message-shape inputs).
+  3. `aryErrLookup` becomes migration candidate:
+    - either move logic into `ErrorMeta.LoadFromLookup` directly,
+    - or retain temporarily as compatibility helper until cleanup pass.
+  4. `SetTblELocations` becomes cleanup candidate if no longer needed by lookup path.
+
+  ### Behavioral Parity Constraints
+  1. No breaking changes to existing call sites that use `errs.RecordErr "Locn", FunctionName` pattern.
+  2. Preserve existing user-facing and developer-facing message text shapes unless explicitly called out by tests.
+  3. Preserve non-user-facing nested trace behavior (`Called by ...`).
+  4. Preserve `IsShowMsgs`/`IsTesting` behavior in automated tests and driver runs.
+
+  ### Refactor Completion Criteria
+  1. `RecordErr` reads as one end-to-end procedure from context setup to conditional `ReportMsg`.
+  2. `AppendErrMsg` is either removed or reduced to a thin internal helper with no duplicated branching logic.
+  3. Sentinel-based not-found branching in message assembly is replaced by `meta.IsFound` pathing.
+  4. Tests confirm parity for:
+    - root developer-facing,
+    - root user-facing,
+    - not-found,
+    - malformed row,
+    - nested trace,
+    - reporting gate behavior.
+
 ## Testing Requirements
 ### Test Module Location
 - `tests_ErrorHandling.bas`

@@ -136,13 +136,46 @@ Cross-workbook setup notes:
 ## Design Decisions
 1. ErrorMeta will store typed fields only. Do not retain the raw lookup array as an ErrorMeta attribute.
 2. Validation behavior for malformed metadata:
-	- If a row is found for the code but required fields are blank or malformed (for example invalid Boolean), set error text to "Malformed Errors_ Row for <Locn>".
+	- If a row is found for the code but required fields are blank or malformed (for example invalid Boolean), set error text to "Malformed Errors_ Row for Locn".
 	- Use this malformed-row message instead of the current generic code-not-found fallback for this case.
 3. Code-not-found handling will occur in the lookup path (ErrorMeta.LoadFromLookup or helper it calls), not in AppendErrMsg.
 4. Retire the current iErrNotFound sentinel pattern for this flow; use explicit found/not-found outcomes from lookup instead.
+## Design Decisions
+1. ErrorMeta will store typed fields only. Do not retain the raw lookup array as an ErrorMeta attribute.
+2. Validation behavior for malformed metadata:
+	- If a row is found for the code but required fields are blank or malformed (for example invalid Boolean), set error text to "Malformed Errors_ Row for Locn".
+	- Use this malformed-row message instead of the current generic code-not-found fallback for this case.
+3. Code-not-found handling will occur in the lookup path (ErrorMeta.LoadFromLookup or helper it calls), not in AppendErrMsg.
+4. Retire the current `iErrNotFound` sentinel pattern for this flow; use explicit found/not-found outcomes from lookup instead.
 
-## Stage Gate Status
-Planning mode only.
+## Additional Refactor Opportunities (3/12/26)
+### High-level Refactor Direction
+Refactor `RecordErr` into the single orchestration procedure for error-message lifecycle and reporting, while keeping the routine name unchanged for backward compatibility.
 
-Next step after ProjectOwner approval of this Change_ note:
-1. Draft procPlan_ note(s) for AppendErrMsg and ErrorMeta class implementation.
+Under this direction:
+1. Treat current `AppendErrMsg` logic as implementation detail of `RecordErr` and fold root/nested message branching into one clear flow.
+2. Keep `RecordErr` as a Sub-based API surface used by existing callers; do not rename.
+3. Move metadata lookup ownership to `ErrorMeta` (including current `aryErrLookup` responsibilities).
+4. Replace sentinel-based not-found handling (`iErrNotFound` checks in message assembly) with explicit `meta.IsFound` outcomes.
+5. Reduce helper overhead by removing now-redundant lookup plumbing once `ErrorMeta` owns direct table lookup.
+6. Normalize early-exit control flow for nested/non-user-facing append behavior to reduce branching depth.
+
+### Intended End State
+1. `RecordErr` computes call context, resolves root-vs-nested path, builds/extends `ErrMsg`, and conditionally reports.
+2. `ErrorMeta` handles lookup, validation, and message-shape inputs.
+3. `errs.IsUserFacing` is retained only if required for cross-method state; otherwise, use local message-mode state derived from `meta` in root flow.
+4. Existing user-visible and developer-visible message wording remains stable.
+
+### Candidate `RecordErr` Flow (clean outline)
+1. Determine driver call and set `CallingFunction = False` for Boolean callers.
+2. Set `errs.Locn`.
+3. If nested error:
+	- append `Called by ...` only for non-user-facing mode;
+	- skip root lookup/build steps.
+4. If new root error:
+	- resolve base/report code;
+	- instance/load/validate `ErrorMeta`;
+	- apply not-found/malformed handling from `meta` state;
+	- append formatted user/developer message;
+	- set `.IsNewErr = False`.
+5. Apply reporting gate (`IsShowMsgs` and driver/testing context) and call `ReportMsg` when enabled.
