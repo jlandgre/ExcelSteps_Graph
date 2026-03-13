@@ -4,34 +4,61 @@
 
 ## Background
 
-Refactor ExcelSteps `ErrorHandleUtil.SetErrs` to match [[ErrorHandling Class]] description of `IsTesting` and `IsShowMsgs` default logic based on 1) "driver", "non-bool" or Boolean `CallingFunction` arg.
+This change follows [[VBA Project Changes]] sequencing and is scoped to planning-level architecture before coding. The refactor starts with call-context behavior, then stabilizes Errors_ metadata inputs, then consolidates ErrorHandling flows around a typed lookup helper.
 
-Referring to ErrorHandling class by its `errs` instanced name, refactor `errs.RecordErr`, `.ReportWarningMsg` and `.LookupCommentMsg` to simplify flows and make consistent across use cases. 
-* Start by simplify Errors_ table columns by eliminating unused sVal column E (headings comma-separate list in `Constants.bas` and example table in [[ErrorHandling Class]]). Rename columns to better match programmatic names: "iCodeReport,Routine,Message,IsUserFacing,VBAProject"
-* Create object oriented helper structure for lookups of attributes from Errors_ sheet table and flags for error conditions during lookup. Suggested attributes :
+### High-level Refactor Flow
+1. **SetErrs behavior alignment (first):**
+   Update `ErrorHandleUtil.SetErrs` to match [[ErrorHandling Class]] expectations for `IsTesting` and `IsShowMsgs` defaults based on `CallingFunction` mode:
+   - driver call (`"driver"`)
+   - non-Boolean/function-name call
+   - Boolean call result path
+
+2. **Errors_ table schema cleanup (second):**
+   Simplify and standardize lookup inputs before changing lookup logic:
+   - remove unused legacy `sVal` column
+   - normalize header list to: `iCodeReport,Module,Routine,Message,IsUserFacing,VBAProject`
+   - keep table semantics consistent with existing reporting behavior
+
+3. **ErrorHandling flow consolidation (third):**
+   * Refactor `errs.RecordErr`, `.ReportWarningMsg`, and `.LookupCommentMsg` so root and nested paths use a consistent metadata-driven decision flow while preserving current user-facing/developer-facing output contracts.
+   * Create ErrorsMeta helper extraction
+	   * Move Errors_ lookups and lookup-state flags into a dedicated helper object and remove sentinel-driven branching (`iErrNotFound`) from calling logic. Use object flag attributes instead
+	   * Add detection of malformed metadata lookup based on expected metadata types/syntax
+
+### Planned ErrorsMeta State and Responsibilities
+Use typed fields/flags so consumers branch on state rather than magic values:
 1. `Code As Long`
-2. ``Routine As String`
+2. `Routine As String`
 3. `Message As String`
 4. `IsUserFacing As Boolean`
 5. `IsNotFound As Boolean`
 6. `IsMalformed As Boolean`
 
-The three used cases mentioned in the purpose, all involve reading a set of values from a found row in the projects Errors_ sheet table.  The current approach uses a sentinel value (`iErrNotFound`) to flag the case where the row is not found. 
-* Current code for fatal errors is essentially a step-by-step procedure, but it follows a meandering path through RecordErr which calls AppendErrMsg which calls other sub functions to look up a Locn base row in Errors_ and compute the ErrorHandling.iCodeReport code used to then look up a specific row’s attributes.
-* There are two lookups currently. First is looking up Routine based on Locn arg to get base code and compute `errs.iCodeReport`. The second is lookup of metadata for message to report and user versus developer facing handling flag.
-* We should streamline RecordErr into a straightforward procedure that  branches appropriately for errors that are either user facing or developer facing as flagged in the Errors_ table.
-* Move Errors_ lookups to a new ErrorsMeta helper class that looks up  ErrorHandling.Locn Base row and computes ErrorHandling.iCodeReport
-* Detect not found Base row and malformed row data. Separately detect not found iCodeReport in second lookup
-* Use the helper class to manage lookups for fatal error reporting from .RecordErr, warning message reporting by ReportWarningMsg and comment from `LookupCommentMsg`
-* Use Boolean flag attributes to seed error message generation for the three use cases (Messages could be consistently generated in the helper class and passed to ErrorHandling attributes for reporting)
-* Eliminate use of the not found sentinel value in lieu of ErrorsMeta flag attributes
-* Within the helper class convert to instancing a `tblRowsCols`, `tblE`, for the Errors_ table. Instead of setting local rngRows and colrng's for the table as currently, provision, the tblE instance with `IsSetColRngs = True` to take advantage of hard-coded colrng attributes for shtErrors (in `tblRowsCols.SetColRngs`) set colrng’s (see xxx tblRowsCols method that does this for the errors sheet). Provision also automatically sets `tblE.rngRows` attribute needed for lookups. 
-* Note that RecordErr for fatal errors needs lookup to determine whether user or developer facing but other use cases are inherently user facing
-* Mis-entered Errors_ row data for codes used by `.ReportWarningMsg` and `LookupCommentMsg` should be automatically corrected to UserFacing = True if False in the Errors_ table
+For implementation planning, `ErrorsMeta` should:
+- resolve base row by `Locn` and compute report code
+- resolve final row by computed `errs.iCodeReport`
+- distinguish base-not-found vs code-not-found
+- detect malformed row data independently
+- support all three use cases: `RecordErr`, `ReportWarningMsg`, `LookupCommentMsg`
+- normalize warning/comment rows to user-facing behavior when table data is mis-entered
+
+### Table Access Approach
+Within helper scope, use a provisioned `tblRowsCols` instance (`tblE`) for `Errors_` with `IsSetColRngs = True` so lookups use `tblRowsCols` column/range attributes instead of local ad hoc range setup.
 
 
-Instructions about testing
-we currently do not have tests for SetErrs or ErrorHandling class. We should populate a new tests_ErrorHandling module with new procedures procs.ErrorHandling and procs.ErrorParams to cover testing of the new helper class
+### Testing (Planning Scope)
+Current state: there is no dedicated test coverage for `SetErrs` or the new `ErrorsMeta`-driven ErrorHandling flow.
+
+High-level test direction:
+- Add/refresh `tests_ErrorHandling.bas`.
+- Use procedure groups `procs.ErrorHandling` and `procs.ErrorParams`.
+- Cover three tiers: `ErrorsMeta` unit tests, `SetErrs` mode tests, and `RecordErr` integration tests.
+- Validate key behaviors: found/not-found, malformed metadata, user-facing vs developer-facing branching, and warning/comment normalization.
+- Use deterministic mock `Errors_` fixtures; see [[ErrorHandling]] for table setup conventions.
+
+Planning gate:
+- Keep this section high level in `Change_`.
+- Put detailed test matrix and assertions in `procPlan_`.
 
 Reference documents:
 - [[VBA Project Architecture]]
@@ -42,57 +69,3 @@ Reference documents:
 - .Github/copilot-instructions.md
 - .Github/skills/create_new_test_procedure.md
 
-## Data I/O Descriptions
-
-
-## Project Architecture
-### Modified Classes
-1. `ErrorHandling.cls`
-   - `RecordErr` is the top-level message/report orchestration point.
-   - `AppendErrMsg` remains a compatibility wrapper.
-   - `ProcessRootErrMsg` contains root-path build logic.
-
-2. `ErrorMeta.cls`
-   - Typed public fields: `Code`, `Routine`, `Message`, `IsUserFacing`, `IsFound`, `IsBaseMessage`, `IsMalformed`.
-   - `LoadFromLookup(meta, errs)` performs direct table lookup.
-   - `Validate(meta, Locn)` enforces malformed-row normalization.
-   - `ToUserMessage` and `ToDeveloperMessage` format output strings.
-
-## Test Architecture
-1. Test module: `tests_ErrorHandling.bas`.
-2. Procedure groups in `Procedures.cls`:
-   - `procs.ErrorHandling`
-   - `procs.RecordErr`
-3. Fixture source: `Populate_Errs_Default` in `Populate_Errs.bas` on test workbook `Errors_` sheet.
-4. Cross-workbook instantiation via existing Validation factory methods (`New_ErrorHandling`, `New_ErrorMeta`).
-
-## Discussion: RecordErr Consolidation (3/12)
-1. Keep routine name/signature compatibility for widespread existing call sites.
-2. Route root and nested append operations through one callable append path.
-3. Use typed metadata state (`meta.IsFound`, `meta.IsMalformed`, `meta.IsUserFacing`) rather than array-index branching for root formatting decisions.
-4. Preserve existing wording contracts and reporting gate semantics.
-
-## Testing Considerations
-1. Unit-level coverage for `ErrorMeta` lookup/validation/formatters.
-2. Integration-level coverage for `RecordErr` root and nested paths.
-3. Mock test data requirements:
-   - base rows
-   - user-facing rows
-   - developer-facing rows
-   - malformed row examples
-4. Existing tests impacted:
-   - `AppendErrMsg` assertions updated to align with wrapper behavior and current mock table semantics.
-5. Edge cases:
-   - not found codes
-   - malformed metadata row
-   - user-facing nested call should not append trace
-   - non-user-facing nested call should append trace
-
-## Procedure Outline
-**RecordErr Refactor Procedure**
-* **`RecordErr`**: [[procPlan_ErrorMetaClass]]
-* `SetCallContext` - Determine driver/Boolean call handling and set caller return state
-* `SetLocnAndSuffix` - Set `errs.Locn` and optional nested suffix (`Called by ...`)
-* `AppendErrMsg` - Route to root helper or nested append path
-* `ProcessRootErrMsg` - Resolve codes, load/validate metadata, format and append root message
-* `ReportIfEnabled` - Apply `IsShowMsgs` and driver/testing gate, then call `ReportMsg`
