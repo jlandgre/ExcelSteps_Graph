@@ -1,8 +1,3 @@
-Commit current working version after changing 
-class initialize to code = zero
-
-
-
 Refactor .RecordErr, xx and y to simplify.   move to use of object oriented helper structure for lookups of attributes from Errors_ sheet table 
 
 processing fatal errors (current ErrorHandling.RecordErr that is called in ErrorExit block of all project Boolean functions), processing non-fatal warning messages in processing calls to add informative comments to cells. 

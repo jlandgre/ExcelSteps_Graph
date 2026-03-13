@@ -1,12 +1,37 @@
 ## Purpose
-Consolidate ErrorHandling root and nested message flow around the 3/12 RecordErr refactor intent: keep `RecordErr` as the stable entry point, centralize root message assembly, and preserve current user-facing/developer-facing behavior.
+* Refactor SetErrs for streamlined code and for logical usage of flags to control message display in production and testing usages
+* Consolidate ErrorHandling root and nested message flow and separate Errors_ table lookup activities into new `ErrorsMeta` helper class: keep `RecordErr` as the stable entry point, centralize root message assembly, and preserve current user-facing/developer-facing behavior.
 
 ## Background
-Current code now includes:
-1. `RecordErr` orchestration with conditional reporting gate.
-2. `AppendErrMsg` retained as compatibility wrapper.
-3. `ProcessRootErrMsg` private helper for root message build.
-4. `ErrorMeta` typed metadata state with direct `Errors_` lookup.
+
+Refactor ExcelSteps `ErrorHandleUtil.SetErrs` to match [[ErrorHandling Class]] description of `IsTesting` and `IsShowMsgs` default logic based on 1) "driver", "non-bool" or Boolean `CallingFunction` arg.
+
+Referring to ErrorHandling class by its `errs` instanced name, refactor `errs.RecordErr`, `.ReportWarningMsg` and `.LookupCommentMsg` to simplify flows and make consistent across use cases. 
+* Start by simplify Errors_ table columns by eliminating unused sVal column E (headings comma-separate list in `Constants.bas` and example table in [[ErrorHandling Class]]). Rename columns to better match programmatic names: "iCodeReport,Routine,Message,IsUserFacing,VBAProject"
+* Create object oriented helper structure for lookups of attributes from Errors_ sheet table and flags for error conditions during lookup. Suggested attributes :
+1. `Code As Long`
+2. ``Routine As String`
+3. `Message As String`
+4. `IsUserFacing As Boolean`
+5. `IsNotFound As Boolean`
+6. `IsMalformed As Boolean`
+
+The three used cases mentioned in the purpose, all involve reading a set of values from a found row in the projects Errors_ sheet table.  The current approach uses a sentinel value (`iErrNotFound`) to flag the case where the row is not found. 
+* Current code for fatal errors is essentially a step-by-step procedure, but it follows a meandering path through RecordErr which calls AppendErrMsg which calls other sub functions to look up a Locn base row in Errors_ and compute the ErrorHandling.iCodeReport code used to then look up a specific row’s attributes.
+* There are two lookups currently. First is looking up Routine based on Locn arg to get base code and compute `errs.iCodeReport`. The second is lookup of metadata for message to report and user versus developer facing handling flag.
+* We should streamline RecordErr into a straightforward procedure that  branches appropriately for errors that are either user facing or developer facing as flagged in the Errors_ table.
+* Move Errors_ lookups to a new ErrorsMeta helper class that looks up  ErrorHandling.Locn Base row and computes ErrorHandling.iCodeReport
+* Detect not found Base row and malformed row data. Separately detect not found iCodeReport in second lookup
+* Use the helper class to manage lookups for fatal error reporting from .RecordErr, warning message reporting by ReportWarningMsg and comment from `LookupCommentMsg`
+* Use Boolean flag attributes to seed error message generation for the three use cases (Messages could be consistently generated in the helper class and passed to ErrorHandling attributes for reporting)
+* Eliminate use of the not found sentinel value in lieu of ErrorsMeta flag attributes
+* Within the helper class convert to instancing a `tblRowsCols`, `tblE`, for the Errors_ table. Instead of setting local rngRows and colrng's for the table as currently, provision, the tblE instance with `IsSetColRngs = True` to take advantage of hard-coded colrng attributes for shtErrors (in `tblRowsCols.SetColRngs`) set colrng’s (see xxx tblRowsCols method that does this for the errors sheet). Provision also automatically sets `tblE.rngRows` attribute needed for lookups. 
+* Note that RecordErr for fatal errors needs lookup to determine whether user or developer facing but other use cases are inherently user facing
+* Mis-entered Errors_ row data for codes used by `.ReportWarningMsg` and `LookupCommentMsg` should be automatically corrected to UserFacing = True if False in the Errors_ table
+
+
+Instructions about testing
+we currently do not have tests for SetErrs or ErrorHandling class. We should populate a new tests_ErrorHandling module with new procedures procs.ErrorHandling and procs.ErrorParams to cover testing of the new helper class
 
 Reference documents:
 - [[VBA Project Architecture]]
@@ -14,25 +39,11 @@ Reference documents:
 - ../Excel_Steps/src/ErrorHandling.cls
 - ../Excel_Steps/src/ErrorMeta.cls
 - ../Excel_Steps/tests/tests_ErrorHandling.bas
-- ../Excel_Steps/tests/Populate_Errs.bas
+- .Github/copilot-instructions.md
+- .Github/skills/create_new_test_procedure.md
 
 ## Data I/O Descriptions
-### Input Data
-1. `errs.Locn`, `errs.iCodeLocal`, `errs.ErrParam`, `errs.IsNewErr`, `errs.IsShowMsgs`, `errs.IsTesting`.
-2. `Errors_` lookup table in `errs.wkbkE`:
-   - Code (col 1)
-   - Routine (col 3)
-   - Message (col 4)
-   - User/developer flag (col 6)
 
-### Output Data
-1. `errs.ErrMsg` appended with root or nested content.
-2. `errs.IsUserFacing` set for root path behavior mode.
-3. `errs.IsNewErr` toggled `False` after root message materialization.
-
-### Behavioral Output
-1. User-facing: concise message plus optional `ErrParam`.
-2. Developer-facing: `Error <code>; in sub or function, ...` format with trace lines for nested calls.
 
 ## Project Architecture
 ### Modified Classes
