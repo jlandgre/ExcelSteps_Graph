@@ -1,51 +1,101 @@
-## Purpose
-Create and validate ColInfo class for storing and utilizing metadata about project data objects (tblRowsCols and mdlScenario). 
+﻿## Purpose
+Create and validate ColInfo class for storing and utilizing metadata about project data objects (tblRowsCols and mdlScenario).
 
 ## Background
 
-This change should follow [[VBA Project Changes]] sequencing and is scoped to planning-level architecture before coding.
+This change follows [[VBA Project Changes]] sequencing and is scoped to planning-level architecture before coding.
 
-Project code will instance `ColInfo` as `colinfo` and uses its attributes for taking actions within the project such as importing and normalizing raw data. `ColInfo` is decoupled from any specific project — It references the project global `IsTest` to toggle between test and production modes (always declared `Public Boolean` in project workbook, default `False`) directly rather than receiving it as an argument.
+Project code instances `ColInfo` as `colinfo` and uses its attributes for actions such as importing and normalizing raw data. `ColInfo` is decoupled from any specific project — it references the project global `IsTest` (always declared `Public Boolean` in project workbook, default `False`) directly rather than receiving it as an argument.
 
-ColInfo is based on use of a project-specific metadata table (see [[Example_ColInfo]]) with default name ColInfo.xlsx that contains rows for normalized variable names in one or more project tables. Its location is specified by `files.pfColInfo` within `files` instance of `ProjFiles`.
+ColInfo is based on a project-specific metadata file `ColInfo.xlsx` (see [[Example_ColInfo]]) whose location is specified by `files.pfColInfo` within a `files` instance of `ProjFiles`. The file is always required as a separate xlsx — no sheet fallback.
 
-Within `colinfo.tbl` (aka `tblRowsCols` instance for the ColInfo.xlsx metadata table), Inclusion in a project table, `tblExample` is denoted by an integer in the `colinfo.tbl` `tblExample` column. The integers specify column order in the normalized data. The table specifies renaming for normalization by the mapping between `VarNameNorm` and `VarNameRaw` columns.
+Within `colinfo.tbl` (a `tblRowsCols` instance), inclusion of a variable in a project table is denoted by an integer in the column named for that table (e.g. `BR_Example`, `Second_Tbl`). The integer specifies column order in the normalized output. Renaming for normalization is defined by the `VarNameNorm` → `VarNameRaw` mapping. Index/key columns are identified by `True` in the `IsIndex` column.
 
-Project tables contain one or more "index" or key columns that are identified by a True toggle value in the `colinfo.tbl` `IsIndex` column. These are analogous to indices in Pandas DataFrames --useful for subsetting, sorting etc. later.
+Because `colinfo.tbl` can contain metadata for multiple project tables, usage for a particular table sets `.CurTbl` and sorts the tbl so that rows included in that table are contiguous at the top. `SetCurTbl` is stateless re-entrant — each call re-sorts and resets `.rngRowsCurTbl`.
 
-Because `colinfo.tbl` can contain metadata for multiple project tables or models, usage for a particular table, `colInfo.curTbl` implies sorting the colinfo tbl by the `.curTbl` column and setting a `.rngRowsCurTbl` row range for rows included in the table (e.g. non-blank `VarNameNorm` column value).  
+A companion `TblImport` class (future change) will handle raw data import, parsing, and normalization using `colinfo.tbl` metadata plus `dImportParams` / `dParseParams` dictionaries. The `data_type_VBA` column in ColInfo.xlsx is present for that future use; no yield method for it in this change.
 
-ExcelSteps contains RecipeStep class with SortBy function usable for sorting on one or more keys (has non-standard error handling where errors are passed to calling routine for handling by errs.RecordErr). This is validated and preferred for sorting tblRowsCols instances
+`FindNextChange` utility (for locating value-change boundaries in sorted columns) is deferred to a future change. `rngToExtent` is sufficient here since post-sort non-blank rows are contiguous at top.
 
-For this and other subsetting purposes, would it be helpful to create a "FindNextChange" utility that sets a cell range for the location of the next change in value (e.g. from empty to non-empty or from value_a to something else) for the purpose of efficiently locating blocks of contiguous values within a column of a sorted table? This seems like it will be more efficient than iterating through rows of unsorted table etc.
+## Data I/O Descriptions
 
-We will get to this later, but my thought is to subsequently create a companion TblImport class (instanced as import) to handle raw data import, parsing and normalization based on the `colinfo.tbl` metadata and `dImportParams` and `dParseParams` dictionaries that specify how to import and parse raw data prior to normalization.
+**Inputs to `Init`:**
+- `colinfo As ColInfo` — self-reference (standard convention)
+- `files As Object` — `ProjFiles` instance; `files.pfColInfo` is required (non-empty)
+- `Optional curTbl As String` — if passed, calls `SetCurTbl(colinfo, curTbl)` after provisioning
 
-## Brainstorming on Class design:
+**Implicit inputs used by `Init`:**
+- `IsTest` — project global Boolean; consumed by `files.pfColInfo` resolution (already set on `files`)
 
-**Attributes**
-* tbl Object set as tblRowsCols instance in Init
-* CurTbl String name of current project table for metadata 
-* rngRowsCurTbl Range
-* aryIndices
-* aryMetrics
-* dictNormalize 
+**Outputs — attributes set after `Init`:**
 
-**Methods**
-* Init(files, Optional curTbl)
-	* open at files.pfColInfo if specified otherwise sheet (ExcelSteps.shtColInfo Const = “colinfo_”) in project workbook
-	* Optional call .SetCurTbl if specified
-- SetCurTbl. Set .CurTbl based on arg input. Sorts .tbl by that Col and sets .rngRowsTbl to be rows with tbl_Name column value = .CurTbl
-	* Sort by .curTbl column, Index_order column, Metric_order column
-	* SetRngRowsTbl
-* YieldAryIndices. Create ary or dict with indices for .curTbl
-	* Indices identified by `True` value in `IsIndex` column
-	* ary preferred because inherently has order and can be iterated 
-	* Factory function so ary acts as pseudo attribute 
-* YieldAryMetrics 
-	* Same as YieldAryIndex for VarName_Norm (exclude `IsIndex=True` variables)
-* YieldDNormalize
-	* Dictionary of all VarName_Norm keys and VarName_Raw values
+| Attribute | Value |
+|---|---|
+| `tbl` | `tblRowsCols` instance provisioned on `"colinfo_"` sheet of opened `ColInfo.xlsx` |
+| `CurTbl` | Empty string until `SetCurTbl` called |
+| `rngRowsCurTbl` | `Nothing` until `SetCurTbl` called |
 
-**Testing**
-Create new ColInfo Procedure and add section to tests_Toolbox module with its driver sub
+**Outputs — attributes set after `SetCurTbl(colinfo, sTbl)`:**
+
+| Attribute | Value |
+|---|---|
+| `CurTbl` | `sTbl` |
+| `rngRowsCurTbl` | Row range of `colinfo.tbl.rngRows` where `CurTbl` column is non-blank; derived via `rngToExtent` after sort |
+
+## Project Architecture
+
+**New class: `ColInfo.cls`**
+- Instanced as `colinfo` in project code (e.g. `Set colinfo = New ColInfo`)
+- All attributes public; no `Property Get/Let`
+
+**Public attributes:**
+- `tbl As Object` — `tblRowsCols` instance for ColInfo.xlsx
+- `CurTbl As String` — name of current project table column
+- `rngRowsCurTbl As Range` — row range for current table's included rows
+
+**Methods:**
+- `Public Function Init(colinfo, files As Object, Optional curTbl As String) As Boolean`
+  - Opens `ColInfo.xlsx` via `ExcelSteps.OpenFile(files.pfColInfo, wkbkColInfo)`; fails fast if `files.pfColInfo` is empty
+  - Provisions `colinfo.tbl` via `tbl.Init(tbl, wkbkColInfo, "colinfo_")`; no Refresh needed
+  - If `curTbl` passed, calls `SetCurTbl(colinfo, curTbl)`
+- `Public Function SetCurTbl(colinfo, sTbl As String) As Boolean`
+  - Sets `.CurTbl = sTbl`
+  - Sorts `colinfo.tbl` ascending by `sTbl` column via `TblSortBy(colinfo.tbl, sTbl)` (blanks sink to bottom)
+  - Sets `.rngRowsCurTbl` using `rngToExtent` from first data cell of `sTbl` column in `colinfo.tbl.rngRows`
+- `Public Function YieldAryIndices(colinfo) As Variant`
+  - Fails fast if `.CurTbl` is empty
+  - Iterates `.rngRowsCurTbl`; collects `VarNameNorm` values where `IsIndex = True`
+  - Returns `Variant` array (caller assigns to local `Variant` before iterating)
+- `Public Function YieldAryMetrics(colinfo) As Variant`
+  - Fails fast if `.CurTbl` is empty
+  - Iterates `.rngRowsCurTbl`; collects `VarNameNorm` values where `IsIndex` is not `True`
+  - Returns `Variant` array
+- `Public Function YieldDNormalize(colinfo) As Object`
+  - Fails fast if `.CurTbl` is empty
+  - Iterates `.rngRowsCurTbl`; adds `VarNameNorm` → `VarNameRaw` pairs to `Dictionary` instance
+  - Fails fast (`errs.IsFail`) if any row has blank `VarNameRaw`
+  - Returns `Dictionary` instance
+
+**Factory function:**
+- `New_ColInfo` in `Validation.bas` — enables cross-workbook instantiation from test suite
+
+## Test Architecture
+
+Tests housed in existing `tests_ToolboxClasses.bas` (shared with ProjFiles tests). New `procs.ColInfo` procedure group added to `Procedures.cls`. Separate `TestingDriver_ColInfo` driver sub in `tests_ToolboxClasses.bas`.
+
+- **Procedure wiring**: Add `Public ColInfo As Object` to `Procedures.cls` declarations; add `Set .ColInfo = New Procedure` + `.ColInfo.Name = "ColInfo"` in `Procedures.Init` under `' tests_ToolboxClasses` group comment. Follow [[vba-testing-create-new-test-procedure]] skill for all wiring steps.
+- **Driver**: `TestingDriver_ColInfo` in `tests_ToolboxClasses.bas`; `procs.Init` args: `ThisWorkbook`, `"ColInfo"`, `"Tests_ToolboxClasses"`; enable `procs.ColInfo.Enabled = True`
+- **Cross-workbook instantiation**: Add `New_ColInfo` factory function to `Validation.bas`
+- **Test data**: `tests/test_data/ColInfo.xlsx` mockup matching [[Example_ColInfo]]; accessed via `files.pfColInfo` with `IsTest = True` and `subdir_tests = "test_data"`
+- **Test setup helper**: shared sub `InitColInfoTest(tst, colinfo, files)` — instances `files` and `colinfo`, sets `IsTest = True`, calls `files.Init` then `colinfo.Init`
+- **Coverage**: `Init` (with and without `curTbl`); `SetCurTbl` (sort, rngRowsCurTbl extent); `YieldAryIndices` / `YieldAryMetrics` (correct split, correct order); `YieldDNormalize` (correct mapping, blank `VarNameRaw` error); `SetCurTbl` re-entrant (call twice with different table names)
+- **Key edge cases**: `curTbl` column all blank after sort; blank `VarNameRaw` triggers fail-fast; `CurTbl` empty when yield called
+
+## Procedure Outline
+
+**ColInfo Class**
+- **`Init`** — fail fast if `files.pfColInfo` empty; open `ColInfo.xlsx`; provision `colinfo.tbl` on `"colinfo_"`; if `curTbl` passed call `SetCurTbl`
+- **`SetCurTbl`** — set `.CurTbl`; call `TblSortBy(colinfo.tbl, sTbl)`; set `.rngRowsCurTbl` via `rngToExtent` from first data cell of `sTbl` column
+- **`YieldAryIndices`** — fail fast if `.CurTbl` empty; ReDim local Variant; iterate `rngRowsCurTbl`; collect `VarNameNorm` where `IsIndex=True`; return array
+- **`YieldAryMetrics`** — same as `YieldAryIndices` for non-index rows
+- **`YieldDNormalize`** — fail fast if `.CurTbl` empty; instance Dictionary; iterate `rngRowsCurTbl`; fail fast on blank `VarNameRaw`; add `VarNameNorm`→`VarNameRaw`; return dict

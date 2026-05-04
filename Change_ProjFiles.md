@@ -59,9 +59,9 @@ Tests housed in existing `Tests_ProjFiles.bas`. New `Procedure` group `procs.Pro
 
 ## Testing Considerations
 
-- **Test module**: `Tests_ProjFiles.bas` (initialized, empty); new driver sub `TestingDriver_ProjFiles`
-- **Procedure wiring**: Add `Public ProjFiles As Object` to `Procedures.cls` declarations; add `Set .ProjFiles = New Procedure` + `.ProjFiles.Name = "ProjFiles"` in `Procedures.Init` under `' Tests_ProjFiles` group comment. Follow [[vba-testing-create-new-test-procedure]] skill for all wiring steps.
-- **Driver**: `TestingDriver_ProjFiles` in `Tests_ProjFiles.bas`; `procs.Init` args: `ThisWorkbook`, `"ProjFiles"`, `"Tests_ProjFiles"`; enable `procs.ProjFiles.Enabled = True`
+- **Test module**: `tests_ToolboxClasses.bas` (shared with ColInfo and other toolbox classes); new driver sub `TestingDriver_ProjFiles`
+- **Procedure wiring**: Add `Public ProjFiles As Object` to `Procedures.cls` declarations; add `Set .ProjFiles = New Procedure` + `.ProjFiles.Name = "ProjFiles"` in `Procedures.Init` under `' tests_ToolboxClasses` group comment. Follow [[vba-testing-create-new-test-procedure]] skill for all wiring steps.
+- **Driver**: `TestingDriver_ProjFiles` in `tests_ToolboxClasses.bas`; `procs.Init` args: `ThisWorkbook`, `"ProjFiles"`, `"Tests_ToolboxClasses"`; enable `procs.ProjFiles.Enabled = True`
 - **Cross-workbook instantiation**: Add `New_ProjFiles` factory function to `Validation.bas`
 - **Test setup**: `Set files = DemoProj.New_ProjFiles` then `tst.Assert tst, files.Init(files, ThisWorkbook)`
 - **Coverage**: Unit tests for `Init` (with and without `subdir_tests`) and `SetGenericPaths` path derivation; verify full attribute set after init
