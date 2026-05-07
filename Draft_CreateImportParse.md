@@ -1,5 +1,13 @@
 Draft of Change_Create_ImportParseNorm_Class
 
+Prompt
+>Change_Create_ImportParseNorm_Class.md note gives basic, raw background on a coding project to write ImportParseNorm.cls. Use grill-me skill to ask and answer questions allowing you to fully populate the Change_ note based on Change_Create_ColInfo_Class format as a guide. It's ok to begin modifying the Change_ note based on our grill-me back and forth if this helps you retain the context versus it being in our chat
+
+
+Cleanup prompts after initial coding:
+>Review code in light of vba-function-architecture. If functions exceed approx. 50 lines (FillMissingVals is example) you should refactor to move part into a helper method. In that example, the code within For Each sKey would be good candidate to move to helper method so loop interior becomes just a call to the helper. As you refactor, add tests of the helper methods. Review all class code for such opportunities using the skill as a guide
+
+>Super! Also review for unecessary use of local variables. They make sense if there is big brevity advantage where class instance + attribute chain is long and With/End With doesn't make sense, but otherwise, use existing class attributes instead of simply equating them to local vars
 ## Purpose
 Create and validate ImportParseNorm class for importing, parsing and normalizing raw data (instance as )
 
@@ -30,6 +38,9 @@ Based on the previous, custom example, envision the following multistep procedur
 	* WriteNormalized
 		* same result as WriteNormalizedRows in example custom code
 		* use colinfo mapping for normalization
+		* code example does not use an efficient approach because it conditionally writes line-by-line to deal with custom filtering by custom attribute .locationBR
+		* Should consider alternate logic that copies entire table to .tblNorm and then selectively deletes unneeded columns
+		* Code also should be all-in on use of .tblRaw and .tblNorm attributes like .wksht instead of unnecessarily using local variables like wkshtNorm for these items.
 	* FilterRows 
 		* Use new colinfo.tbl FilterVals dict to filter based on KeepOnly, KeepExcept, KeepList or KeepExceptList options
 		* Validate for KeepOnly Location="Online" example that subsets mockup raw data to just rows where Location column = "Online"); leave other options for future development
@@ -38,3 +49,7 @@ Based on the previous, custom example, envision the following multistep procedur
 * Need to create `tblUnstructured` class for describing wayfinding for an unstructured table that is described by .wkbk, .wksht, .sht and .rngTable attributes only (e.g. can have an Init as only method that sets these from args and from .wksht.UsedRange for .rngTable)
 * Have successfully used dictionaries such as **dParamsImport** and **dParamsParse** for concepts that have a large number of options. In future, could create **TblInfo** to store metadata as configuration for import and parsing of multiple tables in a project
 * Our custom Dictionary.cls has ability to read in JSON-like strings to populate dictionaries, and this makes it easy to store as metadata in **colinfo.tbl** or future **tblinfo.tbl**
+
+Testing:
+* create new ImportParseNorm Procedure and add section to bottom of TestDriver_ToolBox (vba-testing-create-new-test-procedure skill)
+* For ease of navigation, add section for new testing immediately below TestDriver_ToolBox instead of at bottom of tests_ToolboxClasses.bas
