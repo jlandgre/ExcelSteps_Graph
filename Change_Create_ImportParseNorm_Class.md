@@ -1,5 +1,5 @@
 ## Purpose
-Create and validate `ImportParseNorm.cls` for importing, parsing, and normalizing raw data. Instanced as `importtbl` in project code.
+Create and validate `ImportParseNorm.cls` for importing, parsing, and normalizing raw data. Instanced as `imptbl` in project code.
 
 ## Background
 
@@ -26,7 +26,7 @@ Key design decisions:
 
 | Arg | Type | Description |
 |---|---|---|
-| `importtbl` | `ImportParseNorm` | self-reference |
+| `imptbl` | `ImportParseNorm` | self-reference |
 | `colinfo` | `Object` | `ColInfo` instance; may be pre-initialized or `Nothing` |
 | `files` | `Object` | `ProjFiles` instance; `files.pfImportFile` required |
 | `curTbl` | `String` | Required; passed to `colinfo.SetCurTbl` |
@@ -55,7 +55,7 @@ Key design decisions:
 ## Project Architecture
 
 **New class: `ImportParseNorm.cls`**
-- Instanced as `importtbl`
+- Instanced as `imptbl`
 - All attributes public; no `Property Get/Let`
 
 **New `ProjFiles` attribute:**
@@ -74,40 +74,56 @@ Public tblNorm As Object          ' tblRowsCols for normalized output sheet
 ```
 
 **Methods:**
-- `Public Function Init(importtbl, colinfo, files As Object, curTbl As String, dParamsImport As Object, dParamsParse As Object) As Boolean`
+- `Public Function Init(imptbl, colinfo, files As Object, curTbl As String, dParamsImport As Object, dParamsParse As Object) As Boolean`
   - Sets all args as public attributes
   - Checks `colinfo Is Nothing` or `colinfo.tbl Is Nothing`; if so calls `colinfo.Init(colinfo, files)`
   - Always calls `colinfo.SetCurTbl(colinfo, curTbl)`
-- `Public Function ImportParseNormProcedure(importtbl, colinfo, files As Object, curTbl As String, dParamsImport As Object, dParamsParse As Object) As Boolean`
+- `Public Function ImportParseNormProcedure(imptbl, colinfo, files As Object, curTbl As String, dParamsImport As Object, dParamsParse As Object) As Boolean`
   - Calls `Init`, then `OpenAndValidateRawProcedure`, `ParseRawProcedure`, `NormalizeParsedProcedure` in sequence
-- `Public Function OpenAndValidateRawProcedure(importtbl) As Boolean`
-  - Calls `OpenRawData`, `ValidateRawStructure`, `FillMissingVals`
-- `Public Function OpenRawData(importtbl) As Boolean`
-  - Opens `files.pfImportFile` via `ExcelSteps.OpenFile`
+- `Public Function OpenAndValidateRawProcedure(imptbl) As Boolean`
+  - Calls `OpenRawData`, `ValidateRawStructure`, `ReplaceVals`
+- `Public Function OpenRawData(imptbl) As Boolean`
+  - Opens `files.pfImportFile` via `OpenFile` (within-project call, not `ExcelSteps.OpenFile`)
   - Copies sheet 1 to a new workbook; closes original
-  - Provisions `tblRaw` against new workbook's sheet
-- `Public Function ValidateRawStructure(importtbl) As Boolean`
+  - Provisions `tblRaw` against new workbook's sheet; `tblAlias`/`tblUAlias` needed for ByRef `Provision`/`Init` calls
+  - `RawShape` read inline: `LCase$(CStr(imptbl.dParamsParse.Item("RawShape", "rowscols")))` — no local variable
+- `Public Function ValidateRawStructure(imptbl) As Boolean`
   - Iterates `colinfo.rngRowsCurTbl`; for each row where `VarNameNorm` non-blank, confirms `VarNameRaw` exists in `tblRaw.rngHeader` via `rngTblHeaderVal`; fails fast on first missing column
-  - Future: `dParamsParse` can relax this requirement
-- `Public Function FillMissingVals(importtbl) As Boolean`
-  - For each row in `colinfo.rngRowsCurTbl` with a non-blank `FillVals` entry, parses JSON-like string into a dictionary; applies value replacements and blank-fills in-place on `tblRaw`
-- `Public Function ParseRawProcedure(importtbl) As Boolean`
-  - Checks `dParamsParse` `RawShape` key; if `"rowscols"` sets `tblParsed = tblRaw` and exits
-  - Non-rowscols shapes deferred to future change
-- `Public Function NormalizeParsedProcedure(importtbl) As Boolean`
+  - `rngVarNormCol`/`rngVarRawCol` kept as loop-cached ranges
+- `Public Function ReplaceVals(imptbl) As Boolean` *(was `FillMissingVals` in plan)*
+  - For each row in `colinfo.rngRowsCurTbl` with a non-blank `FillVals` entry, parses JSON-like string into a `New Dictionary`; sorts `tblRaw` by that column; applies value replacements and blank-fills via `ApplyFillMapToSortedColumn`
+- `Public Function ApplyFillMapToSortedColumn(imptbl, rngDataCol As Range, dict As Object) As Boolean`
+  - Iterates `dict.GetKeys`; for each key calls `ApplyFillKeyToSortedColumn`; early-exits if `dict.Count = 0` or keys array empty
+- `Public Function ApplyFillKeyToSortedColumn(imptbl, rngDataCol As Range, ByVal sKey As String, ByVal valFill As Variant) As Boolean`
+  - `BLANK` key: uses `SpecialCells(xlCellTypeBlanks)` to fill blanks
+  - Other keys: `FindInRange` for first match; native `.Find` with `xlPrevious` for last match; bulk-sets range between them
+- `Public Function ParseRawProcedure(imptbl) As Boolean`
+  - Checks `dParamsParse` `RawShape` key inline; if `"rowscols"` sets `tblParsed = tblRaw` and exits
+  - Non-rowscols: `errs.IsFail(True, 1, ...)` — explicit unimplemented error
+- `Public Function NormalizeParsedProcedure(imptbl) As Boolean`
   - Calls `WriteNormalized`, then `FilterRows`
-- `Public Function WriteNormalized(importtbl) As Boolean`
-  - Builds sorted list of `(orderInt, VarNameNorm, VarNameRaw)` from `colinfo.rngRowsCurTbl` ordered by `CurTbl` integer; skips rows where integer is blank or non-numeric
-  - Creates new `"norm_"` sheet in `tblRaw.wkbk`; writes `VarNameNorm` values as header in order
-  - For each entry, copies entire data column from `tblRaw` (located by `VarNameRaw`) to corresponding `tblNorm` column
-  - Provisions `tblNorm` against new sheet
-- `Public Function FilterRows(importtbl) As Boolean`
-  - Iterates `colinfo.rngRowsCurTbl`; for each row with non-blank `FilterVals`, parses JSON-like string
-  - Implements `KeepOnly` only: sorts `tblNorm` by filter column, uses `FindInRange` to locate first and last matching row, bulk-deletes rows above and below in two `.Delete` calls
-  - Other filter options (`KeepList`, `KeepExcept`, `KeepExceptList`) deferred to future
+- `Public Function WriteNormalized(imptbl) As Boolean`
+  - Validates `tblParsed` is a `tblRowsCols`; delegates to `BuildNormMappings` + `WriteNormFromMappings`
+- `Public Function BuildNormMappings(imptbl, ByRef aryNorm() As String, ByRef aryRaw() As String, ByRef maxOrder As Long) As Boolean`
+  - Two-pass loop over `colinfo.rngRowsCurTbl`: first pass finds `maxOrder`; second pass fills `aryNorm`/`aryRaw` by order index
+  - Fails if `maxOrder = 0` or any ordered `VarNameNorm` row has blank `VarNameRaw`
+- `Public Function WriteNormFromMappings(imptbl, aryNorm() As String, aryRaw() As String, ByVal maxOrder As Long) As Boolean`
+  - Deletes and recreates `"norm_"` sheet; writes header; copies data columns from `tblParsed` by `VarNameRaw`
+  - Provisions `tblNorm` against new sheet; `tblAlias` needed for ByRef `Provision` call
+- `Public Function FilterRows(imptbl) As Boolean`
+  - Iterates `colinfo.rngRowsCurTbl`; for each row with non-blank `FilterVals`, parses JSON-like string via `New Dictionary`
+  - If `dict.Exists("KeepOnly")` calls `ApplyKeepOnlyFilter`; other filter options deferred to future
+- `Private Function ApplyKeepOnlyFilter(imptbl, ByVal sVarNorm As String, ByVal keepVal As Variant) As Boolean`
+  - Sorts `tblNorm` by `sVarNorm`; locates first/last matching row; bulk-deletes rows above and below in two `.Delete` calls
+  - Re-provisions `tblNorm` after deletion; `tblAlias` needed for ByRef `Provision` call
 
-**Factory function:**
-- `New_ImportParseNorm` in `Validation.bas` — enables cross-workbook instantiation from test suite
+**Factory functions added to `Validation.bas`:**
+- `New_ImportParseNorm` — enables cross-workbook instantiation from test suite
+- `New_tblUnstructured` — enables cross-workbook instantiation of `tblUnstructured`
+
+**`tblUnstructured.cls` implemented** (was noted as "future change" in plan):
+- Attributes: `wkbk`, `sht`, `wksht`, `rngTable`
+- `Init(tblU, wkbk, sht)` — sets all attributes; defaults `rngTable` to `UsedRange`
 
 ## Test Architecture
 
@@ -115,35 +131,40 @@ Tests housed in `tests_ToolboxClasses.bas`. New `procs.ImportParseNorm` procedur
 
 - **Test section location**: immediately below `TestDriver_ToolBox` for ease of navigation (not at bottom of file)
 - **Test data**: two static raw data files in `tests/test_data/`:
-  - `BR_Raw_Mockup.csv` — `BR_Example` raw columns; includes mixed Location values (Online + others), blank `ProdType_Raw` values, and `Locn10` values to exercise `FillMissingVals` and `FilterRows`
-  - `Second_Raw_Mockup.csv` — `Second_Tbl` raw columns; no `FillVals`/`FilterVals` (simpler validation case)
-- **`files.pfImportFile`**: set by `ProjFiles.Init` when `IsTest = True` pointing to test data CSV/xlsx
-- **Test helper**: `InitImportParseNormTest(tst, importtbl, colinfo, files, curTbl, dParamsImport, dParamsParse)` — shared setup sub instances all objects and calls `importtbl.Init`
+  - `BR_Raw_Mockup.xlsx` — `BR_Example` raw columns; includes mixed Location values (Online + others), blank `ProdType_Raw` values, and `Locn10` values to exercise `ReplaceVals` and `FilterRows`
+  - `Second_Raw_Mockup.xlsx` — `Second_Tbl` raw columns; no `FillVals`/`FilterVals` (simpler validation case)
+- **`files.pfImportFile`**: set by test helper using `tst.wkbkTest.Path` + separator + test data subfolder path
+- **Test helper**: `InitImportParseNormTest(tst, imptbl, colinfo, files, dParamsImport, dParamsParse, curTbl)` — shared setup sub; instances all objects and calls `imptbl.Init`; companion `CloseImportParseNormWkbk(imptbl)` closes temp workbook
 
-**Test list:**
+**Test list (as built):**
 - `test_ImportParseNorm_Init` — attributes set; colinfo initialized; SetCurTbl called
 - `test_ImportParseNorm_OpenRawData` — `tblRaw` provisioned; original workbook closed
-- `test_ImportParseNorm_ValidateRawStructure` — passes for valid raw; fails fast on missing VarNameRaw column
-- `test_ImportParseNorm_FillMissingVals` — blanks filled; value replacements applied in-place
-- `test_ImportParseNorm_ParseRaw` — `tblParsed Is tblRaw` for `RawShape=rowscols`
+- `test_ImportParseNorm_ValidateRawStructure` — passes for valid raw structure
+- `test_ImportParseNorm_BuildNormMappings` — `aryNorm`/`aryRaw` arrays and `maxOrder` correct
+- `test_ImportParseNorm_ApplyFillMapToSortedColumn` — dict parsed with unquoted values; blanks and key replacements applied
+- `test_ImportParseNorm_ReplaceVals` — value replacements applied in-place on `tblRaw`
 - `test_ImportParseNorm_WriteNormalized` — `tblNorm` header matches ordered VarNameNorm; data present
 - `test_ImportParseNorm_FilterRows` — `KeepOnly:Online` reduces rows to only Online location rows
-- `test_ImportParseNorm_OpenAndValidateRawProcedure` — integration: open + validate + fill
-- `test_ImportParseNorm_NormalizeParsedProcedure` — integration: write + filter
-- `test_ImportParseNorm_Procedure` — end-to-end: correct tblNorm shape, header order, row count
+
+*Deferred (not built): `test_ImportParseNorm_ParseRaw`, `test_ImportParseNorm_OpenAndValidateRawProcedure`, `test_ImportParseNorm_NormalizeParsedProcedure`, `test_ImportParseNorm_Procedure`*
 
 ## Procedure Outline
 
 **ImportParseNorm Class**
 - **`Init`** — set all args as attributes; check/init colinfo; call SetCurTbl
 - **`ImportParseNormProcedure`** — call Init, OpenAndValidateRawProcedure, ParseRawProcedure, NormalizeParsedProcedure
-- **`OpenAndValidateRawProcedure`** — call OpenRawData, ValidateRawStructure, FillMissingVals
-- **`OpenRawData`** — open pfImportFile; copy sheet to new workbook; close original; provision tblRaw
+- **`OpenAndValidateRawProcedure`** — call OpenRawData, ValidateRawStructure, ReplaceVals
+- **`OpenRawData`** — open pfImportFile; copy sheet to new workbook; close original; provision tblRaw (rowscols or tblUnstructured per RawShape)
 - **`ValidateRawStructure`** — iterate rngRowsCurTbl; for non-blank VarNameNorm rows confirm VarNameRaw in tblRaw header; fail fast on missing
-- **`FillMissingVals`** — iterate rngRowsCurTbl FillVals column; parse JSON-like string; apply replacements in-place on tblRaw
-- **`ParseRawProcedure`** — if RawShape=rowscols set tblParsed=tblRaw; else defer (dummy)
+- **`ReplaceVals`** *(was FillMissingVals)* — iterate rngRowsCurTbl FillVals column; parse JSON-like string into New Dictionary; sort tblRaw; call ApplyFillMapToSortedColumn
+- **`ApplyFillMapToSortedColumn`** — iterate dict keys; call ApplyFillKeyToSortedColumn for each; early-exit if dict empty
+- **`ApplyFillKeyToSortedColumn`** — BLANK key: SpecialCells blanks fill; other keys: FindInRange first + native Find last; bulk range assignment
+- **`ParseRawProcedure`** — if RawShape=rowscols set tblParsed=tblRaw; else explicit IsFail error (unimplemented)
 - **`NormalizeParsedProcedure`** — call WriteNormalized, FilterRows
-- **`WriteNormalized`** — build sorted (orderInt, VarNameNorm, VarNameRaw) list; create norm_ sheet; write header; copy columns from tblParsed by VarNameRaw; provision tblNorm
-- **`FilterRows`** — for each FilterVals row parse dict; KeepOnly: sort tblNorm, FindInRange first/last match, bulk-delete above and below
+- **`WriteNormalized`** — validate tblParsed; call BuildNormMappings then WriteNormFromMappings
+- **`BuildNormMappings`** — two-pass loop over rngRowsCurTbl: find maxOrder, then fill aryNorm/aryRaw by order index
+- **`WriteNormFromMappings`** — delete/recreate norm_ sheet; write header; copy data columns from tblParsed; provision tblNorm
+- **`FilterRows`** — for each FilterVals row parse dict via New Dictionary; KeepOnly: call ApplyKeepOnlyFilter
+- **`ApplyKeepOnlyFilter`** (Private) — sort tblNorm, FindInRange first/last match, bulk-delete above and below; re-provision tblNorm
 
 JDL 5/7/26
