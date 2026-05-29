@@ -4,7 +4,7 @@
 
 ## Background
 
-This change follows [[Projects/VBA_Development/VBA Project Changes]] sequencing and is scoped to planning-level architecture before coding. The refactor starts with call-context behavior, then stabilizes Errors_ metadata inputs, then consolidates ErrorHandling flows around a typed lookup helper.
+This change follows [[VBA Project Changes]] sequencing and is scoped to planning-level architecture before coding. The refactor starts with call-context behavior, then stabilizes Errors_ metadata inputs, then consolidates ErrorHandling flows around a typed lookup helper.
 
 ### High-level Refactor Flow
 1. **SetErrs behavior alignment (first):**
@@ -62,7 +62,7 @@ Planning gate:
 
 Reference documents:
 - [[VBA Project Architecture]]
-- [[Projects/VBA_Development/VBA Project Changes]]
+- [[VBA Project Changes]]
 - ../Excel_Steps/src/ErrorHandling.cls
 - ../Excel_Steps/src/ErrorMeta.cls
 - ../Excel_Steps/tests/tests_ErrorHandling.bas

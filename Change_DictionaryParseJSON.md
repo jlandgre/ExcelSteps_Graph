@@ -12,7 +12,7 @@ The `Dictionary` class in ExcelSteps provides a cross-platform dictionary. This 
 
 Reference documents:
 - [[VBA Project Architecture]] - Standard VBA project structure
-- [[Projects/VBA_Development/VBA Project Changes]] - Planning mode process
+- [[VBA Project Changes]] - Planning mode process
 - Dictionary.cls source code: `Excel_Steps/src/Dictionary.cls`
 - Existing tests: `Excel_Steps/tests/tests_Dictionary.bas`
 

@@ -10,7 +10,7 @@ Current code now includes:
 
 Reference documents:
 - [[VBA Project Architecture]]
-- [[Projects/VBA_Development/VBA Project Changes]]
+- [[VBA Project Changes]]
 - ../Excel_Steps/src/ErrorHandling.cls
 - ../Excel_Steps/src/ErrorMeta.cls
 - ../Excel_Steps/tests/tests_ErrorHandling.bas
