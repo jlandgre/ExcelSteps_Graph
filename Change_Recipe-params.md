@@ -81,7 +81,7 @@ Unsupported keys and unsupported enum names should fail through the existing rec
 For `HorizAlign`, apply alignment to the data cells for the target table variable:
 
 ```vb
-Intersect(targetColumn.EntireColumn, tbl.rngRows).HorizontalAlignment = Step.HorizAlign
+Intersect(targetColumn.EntireColumn, tbl.rngRows).HorizontalAlignment = Step.HorizAlignVal
 ```
 
 The header cell is not affected. This matches the scoping of number format behavior, which applies to data values rather than table headers.
