@@ -1,0 +1,29 @@
+| A                                                                        | B                                                        | C                | D   | E   | F                               |
+| ------------------------------------------------------------------------ | -------------------------------------------------------- | ---------------- | --- | --- | ------------------------------- |
+| **Currently enabled formatting and formula refresh**                     |                                                          |                  |     |     |                                 |
+|                                                                          | A typical input variable (no formula)                    | normal_var       |     |     | 20.00                           |
+|                                                                          | A typical calculated variable                            | normal_calc_var  |     |     | **40.00**                       |
+|                                                                          |                                                          |                  |     |     |                                 |
+| **Input block and calculated block placeholders**                        |                                                          |                  |     |     |                                 |
+|                                                                          | Mockup --placeholder locates the block for first Refresh | inputvar_xx      |     |     | ignore/for blockvar placeholder |
+|                                                                          |                                                          |                  |     |     |                                 |
+|                                                                          | Mockup --placeholder locates the block for first Refresh | calculatedvar_xx |     |     | ignore/for blockvar placeholder |
+|                                                                          |                                                          |                  |     |     |                                 |
+| **Pre-existing input variable block (matches n=3)**                      |                                                          |                  |     |     |                                 |
+|                                                                          | block input variable 1                                   | input_1          |     |     | 100                             |
+|                                                                          | block input variable 2                                   | input_2          |     |     | 200                             |
+|                                                                          | block input variable 3                                   | input_3          |     |     | 300                             |
+|                                                                          |                                                          |                  |     |     |                                 |
+| **Pre-existing calculated variable block (template with > n variables)** |                                                          |                  |     |     |                                 |
+|                                                                          | block calculated variable 1                              | calcvarblock_1   |     |     | **40**                          |
+|                                                                          | block calculated variable 2                              | calcvarblock_2   |     |     | **80**                          |
+|                                                                          | block calculated variable 3                              | calcvarblock_3   |     |     | **120**                         |
+|                                                                          | block calculated variable 5 (not used if n=3)            | calcvarblock_4   |     |     | **160**                         |
+|                                                                          | block calculated variable 4 (not used if n=3)            | calcvarblock_5   |     |     | **200**                         |
+|                                                                          |                                                          |                  |     |     |                                 |
+| **Pre-existing input variable block (template with > n variables)**      |                                                          |                  |     |     |                                 |
+|                                                                          | block calculated variable 1                              | inputvarblock_1  |     |     | 10                              |
+|                                                                          | block calculated variable 2                              | inputvarblock_2  |     |     | 20                              |
+|                                                                          | block calculated variable 3                              | inputvarblock_3  |     |     | 30                              |
+|                                                                          | block calculated variable 5 (not used if n=3)            | inputvarblock_4  |     |     | 40                              |
+|                                                                          | block calculated variable 4 (not used if n=3)            | inputvarblock_5  |     |     | 50                              |
